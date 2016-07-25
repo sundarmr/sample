@@ -1,0 +1,18 @@
+Manifest-Version: 1.0
+Export-Package: org.amex.epv;uses:="org.slf4j"
+Built-By: smunirat
+Tool: Bnd-1.15.0
+Bundle-Name: EPV pass Requestor
+Created-By: Apache Maven Bundle Plugin
+Build-Jdk: 1.7.0_80
+Bundle-Version: 0.0.1.SNAPSHOT
+Bnd-LastModified: 1469474935735
+Bundle-ManifestVersion: 2
+Import-Package: com.ibm.as400.access;resolution:=optional,javax.crypto
+ ,javax.crypto.interfaces,javax.crypto.spec,javax.naming,javax.naming.
+ directory,javax.security.auth.x500,javax.xml.parsers,javax.xml.transf
+ orm,javax.xml.transform.dom,javax.xml.transform.stream,org.slf4j;vers
+ ion="[1.7,2)",org.w3c.dom,org.xml.sax
+Embed-Dependency: javapasswordsdk;inline=true
+Bundle-SymbolicName: epv-password
+
