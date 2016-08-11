@@ -1,0 +1,180 @@
+<!--
+
+     Copyright 2005-2015 Red Hat, Inc.
+
+     Red Hat licenses this file to you under the Apache License, version
+     2.0 (the "License"); you may not use this file except in compliance
+     with the License.  You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+     implied.  See the License for the specific language governing
+     permissions and limitations under the License.
+
+-->
+<beans
+  xmlns="http://www.springframework.org/schema/beans"
+  xmlns:amq="http://activemq.apache.org/schema/core"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+  http://activemq.apache.org/schema/core http://activemq.apache.org/schema/core/activemq-core.xsd">
+
+    <!-- Allows us to use system properties and fabric as variables in this configuration file -->
+	
+	<bean id="environmentVariablesConfiguration"
+		class="org.jasypt.encryption.pbe.config.EnvironmentStringPBEConfig">
+		<property name="algorithm" value="PBEWithMD5AndDES" />
+		<property name="passwordEnvName" value="JASYPT_ENCRYPTION_PASSWORD" />
+	</bean>
+
+	<bean id="configurationEncryptor" class="org.jasypt.encryption.pbe.StandardPBEStringEncryptor">
+		<property name="config" ref="environmentVariablesConfiguration" />
+	</bean>
+
+	<bean id="propertyConfigurer"
+		class="org.jasypt.spring31.properties.EncryptablePropertyPlaceholderConfigurer">
+		<constructor-arg ref="configurationEncryptor" />
+		<property name="location" value="file:${karaf.base}/etc/ldap.cfg" />
+		<property name="properties">
+			<bean class="io.fabric8.mq.fabric.ConfigurationProperties" />
+		</property>
+	</bean>
+ 
+
+	
+    <bean id="passWordValue" class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
+	<property name="targetObject">
+	    <bean class="org.amex.epv.EPVPassWordRequestor" id="epv" >
+	    	 <!-- Object attribute value configured in EPV -->
+       		 <property name="queryObject" value="${queryObject}"/> 
+       		 <!--  Application id configured in EPV -->
+       		 <property name="appId" value="${applicationId}"/>
+       		 <!--  User name for whom the password is being requested -->
+        	 <property name="userName" value="${userName}"/>
+        	 <!-- Safe from which the password needs to be retrieved -->
+        	 <property name="safe" value="${safe}"/>
+        	 <!--  Reason for retrieving the password from EPV  -->
+        	 <property name="reason" value="${reason}"/>
+        	 <!-- In case of failure what is the wait time between subsequent requests -->
+        	 <property name="retryIntervalms" value="${retryIntervalms}"/>
+        	 <!-- In case of fialure how many times to retry to request the password -->
+       		 <property name="maxRetryCounts" value="${maxRetryCounts}"/>
+       		 <!-- To bypass EPV request and echo the password from the properties file -->
+		 	 <property name="encryptedPassword" value="${ldapPassword}"/>
+    	    </bean>
+        </property>
+        <property name="targetMethod" value="getPassword"/>
+   </bean>
+	
+       
+
+    <broker xmlns="http://activemq.apache.org/schema/core" brokerName="amq" dataDirectory="${data}" start="false" restartAllowed="true">
+
+        <destinationPolicy>
+            <policyMap>
+              <policyEntries>
+                <policyEntry topic=">" producerFlowControl="true">
+                  <pendingMessageLimitStrategy>
+                    <constantPendingMessageLimitStrategy limit="1000"/>
+                  </pendingMessageLimitStrategy>
+                </policyEntry>
+                <policyEntry queue=">" producerFlowControl="true" memoryLimit="1mb">
+                </policyEntry>
+              </policyEntries>
+            </policyMap>
+        </destinationPolicy>
+
+        <managementContext>
+            <managementContext createConnector="false"/>
+        </managementContext>
+
+        <persistenceAdapter>
+            <kahaDB directory="${data}/kahadb"/>
+        </persistenceAdapter>
+	
+	<sslContext>
+		<sslContext keyStore="${karaf.base}/etc/jbossweb.keystore" keyStorePassword="JbossPassword" trustStore="${karaf.base}/etc/truststore.ks" trustStorePassword="secret"/>
+	</sslContext>
+        <plugins>
+            <runtimeConfigurationPlugin checkPeriod="1000"/>
+	    <jaasAuthenticationPlugin configuration="karaf" />
+	    <authorizationPlugin>
+    	    <map>
+		<bean id="propertiesAwareCached" class="org.activemq.security.AmexCachedLdapAuthorizationMap"  
+                              xmlns="http://www.springframework.org/schema/beans">
+                                <property name="legacyGroupMapping" value="false"/>
+                                <property name="connectionURL" value="ldaps://adsdc-vip-e1-NEW.app.aexp.com:636"/>
+                                <property name="connectionUsername" value="CN=svc.ePaaS.E1,OU=ServiceAccounts,OU=Process,DC=e1ads,DC=aexp,DC=com"/>
+                                <property name="connectionPassword" ref="passWordValue" />
+                                <!--  OU where all the destinations have bene configured in LDAP -->
+                                <property name="queueSearchBase" value="OU=SecurityGroups,OU=Process,DC=e1ads,DC=aexp,DC=com" />
+                                <property name="topicSearchBase" value="OU=SecurityGroups,OU=Process,DC=e1ads,DC=aexp,DC=com"/>
+                                <property name="tempSearchBase" value="OU=SecurityGroups,OU=Process,DC=e1ads,DC=aexp,DC=com"/>
+                                <property name="permissionSearchBase" value="OU=SecurityGroups,OU=Process,DC=e1ads,DC=aexp,DC=com"/>
+                                
+                                <property name="groupClass" value="org.apache.karaf.jaas.boot.principal.RolePrincipal"/>
+                                <!--  Name prefix used for destinations -->
+                                <property name="queueNamesPrefix" value="GG-ADS-E1-ecp-AMQ-QUEUE-"/>
+                                <property name="topicNamesPrefix" value="GG-ADS-E1-eCP-AMQ-Topic-"/>
+                                <property name="tempQueuesNamesPrefix" value="GG-ADS-E1-eCP-AMQ-TEMP"/>
+                                
+								<property name="groupObjectClass" value="group" />
+								<property name="userNameAttribute" value="samAccountName" />
+								<!--  should be mandatory and greater than 0 -->
+								<property name="refreshInterval" value="10000000" />
+								<!-- Optional parameter defaults to TSLv1 -->
+								<property name="sslProtocol" value="TLSv1"/>
+								<!-- Optional parameter defaults to PKIX -->
+								<property name="sslAlgorithm" value="PKIX"/>
+								<!-- Optional parameter defaults to Java key store -->
+								<property name="storeType" value="JKS"/>
+								<property name="keyStorePath" value="${karaf.base}/etc/broker.ks"/>
+								<property name="keyStorePassword" value="secret" />
+								<property name="trustStorePath" value="${karaf.base}/etc/truststore.ks"/>
+								<property name="trustStorePassword" value="secret" />
+								<!-- when true the destinations in AMQ will be with the prefixes as mentioned by the queueNamesPrefix
+									 topicNamesPrefix properties . By default the prefixes will not be used to refer to queues. -->
+								<property name="createDestinationsWithPrefix" value="true"/>
+								<!--  when a path separtor other than "." is specified please add the  -->
+								<property name="pathSeparator" value="-"/>
+                        </bean> 
+
+    	   </map>
+	     </authorizationPlugin>
+	    <destinationPathSeparatorPlugin pathSeparator="-"></destinationPathSeparatorPlugin>
+        </plugins>
+
+        <systemUsage>
+            <systemUsage>
+                <memoryUsage>
+                    <memoryUsage percentOfJvmHeap="70"/>
+                </memoryUsage>
+                <storeUsage>
+                    <storeUsage limit="100 gb"/>
+                </storeUsage>
+                <tempUsage>
+                    <tempUsage limit="50 gb"/>
+                </tempUsage>
+            </systemUsage>
+        </systemUsage>
+
+        <transportConnectors>
+            <transportConnector name="openwire" uri="tcp://lpdosput00716.phx.aexp.com:61616"/>
+	    	<transportConnector name="ssl" uri="ssl://lpdosput00716.phx.aexp.com:61617"/>
+        </transportConnectors>
+
+<!--	<networkConnectors>
+                <networkConnector name="lpdosput00716.phx.aexp.com" uri="static:tcp://lpdosput00717.phx.aexp.com:61616" duplex="true" userName="admin" password="admin" networkTTL="-1">
+                        <dynamicallyIncludedDestinations>
+                                <topic physicalName=">"/>
+                                <queue physicalName=">"/>
+                        </dynamicallyIncludedDestinations>
+                </networkConnector>
+        </networkConnectors>
+-->
+    </broker>
+
+</beans>
