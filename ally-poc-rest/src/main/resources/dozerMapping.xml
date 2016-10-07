@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mappings xmlns="http://dozer.sourceforge.net" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://dozer.sourceforge.net http://dozer.sourceforge.net/schema/beanmapping.xsd">
+	<mapping>
+		<class-a>com.predic8.crm._1.CustomerType</class-a>
+		<class-b>com.ally.redhat.poc.soap.model.SoapCustomer</class-b>
+		<field>
+			<a>id</a>
+			<b>customerId</b>
+		</field>
+		<field>
+			<a>person.firstName</a>
+			<b>customerName</b>
+		</field>
+		<field>
+			<a>address.companyName</a>
+			<b>companyName</b>
+		</field>
+		<field>
+			<a>person.address.street</a>
+			<b>street</b>
+		</field>
+		<field>
+			<a>person.address.city</a>
+			<b>city</b>
+		</field>
+		<field>
+			<a>person.address.zipCode</a>
+			<b>zipCode</b>
+		</field>
+	</mapping>
+</mappings>
